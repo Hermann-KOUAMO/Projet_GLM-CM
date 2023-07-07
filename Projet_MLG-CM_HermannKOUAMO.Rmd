@@ -1,0 +1,708 @@
+---
+title: "Projet Modèles linéaires généralisés & Choix de modèles"
+author: "Hermann KOUAMO DJOMO"
+date: "2023-07-02"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    fig_caption: true
+    
+  html_document:
+    df_print: paged
+    
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm (list = ls())
+library(corrplot)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tidyverse)
+library(MASS)
+```
+
+\newpage
+
+# Introduction
+
+Ce projet est relatif à la validation des connaissances des modules **Modèle linéaire généralisé et Choix de modèle** dans le cadre du **Master Statistique et Big data pour la promotion 2022/2024**.
+
+Le projet consiste à proposer un modèle de prediction  afin de déterminer s'il pleuvra le lendemain ou non compte tenu des relevés d'un ensemble de variables quantitatives effectués la veille.
+
+# Chargement exploration et mise en forme des données
+
+## Chargement des données
+```{r "Chargement des donnees", echo=TRUE}
+# donnees d'entrainement
+d.train=read.csv("meteo.train.csv",header = TRUE, sep =",", na.strings="" )
+
+# donnees de test
+d.test=read.csv("meteo.test.csv",header = TRUE, sep =",", na.strings="" ) 
+```
+
+## Exploration des données
+
+
+### Donnéees d'entraînement
+```{r "Exploration des donnees d'entrainement", echo=FALSE}
+#Taille des donnees 
+dim(d.train) #La table contient 47 variables et 1180 observations
+
+#Verification de donnees manquantes
+sum(is.na(d.train)) #Il n'y a aucune donnees manquantes
+
+#Resume des variables
+summary(d.train)
+```
+
+### Données de test
+```{r "Exploration des donnees de test", echo=FALSE}
+#Taille des donnees 
+dim(d.test) #La table contient 46 variables et 290 observations
+
+#Verification de donnees manquantes
+sum(is.na(d.test)) #Il n'y a aucune donnees manquantes
+
+#Resume des variables
+summary(d.test)
+```
+
+Au délà des observations, les tables de données d'entrainement et de test diffèrent
+par la variable *pluie.demain* qui est présente dans la table de données d'entraînement et absente dans la table de données de test.
+
+## Mise en forme des données
+
+Pour un meilleur affichage des données, nous allons renommer les différentes variables, afin de leur attribuer des noms avec moins de caractères.
+
+Au premier regard, nous avons déduit que les 6 premières variables ne sont pas 
+utiles dans le cadre de notre travail. Nous ne les prendrons donc pas en compte 
+dans les tables reformatées que nous mettons en place.
+
+```{r "Reformatage", echo=FALSE}
+#Donnees d'apprentissage
+d.learn = d.train[,7:47]
+
+d.learn = dplyr::rename(d.learn,
+                        temp.mean = Temperature.daily.mean..2.m.above.gnd.,
+                        hmdty.mean = Relative.Humidity.daily.mean..2.m.above.gnd.,
+                        press.mean = Mean.Sea.Level.Pressure.daily.mean..MSL.,
+                        precp = Total.Precipitation.daily.sum..sfc.,
+                        snows = Snowfall.amount.raw.daily.sum..sfc.,
+                        cl.tot.mean = Total.Cloud.Cover.daily.mean..sfc.,
+                        cl.h.mean = High.Cloud.Cover.daily.mean..high.cld.lay.,
+                        cl.m.mean = Medium.Cloud.Cover.daily.mean..mid.cld.lay.,
+                        cl.l.mean = Low.Cloud.Cover.daily.mean..low.cld.lay.,
+                        sunsh = Sunshine.Duration.daily.sum..sfc.,
+                        rdtion = Shortwave.Radiation.daily.sum..sfc.,
+                        w.s.h10m.mean = Wind.Speed.daily.mean..10.m.above.gnd.,
+                        w.d.h10m = Wind.Direction.daily.mean..10.m.above.gnd.,
+                        w.s.h80m.mean = Wind.Speed.daily.mean..80.m.above.gnd.,
+                        w.d.h80m = Wind.Direction.daily.mean..80.m.above.gnd.,
+                        w.s.p900.mean = Wind.Speed.daily.mean..900.mb.,
+                        w.d.p900 = Wind.Direction.daily.mean..900.mb.,
+                        w.g.mean = Wind.Gust.daily.mean..sfc.,
+                        temp.max = Temperature.daily.max..2.m.above.gnd.,
+                        temp.min = Temperature.daily.min..2.m.above.gnd.,
+                        hmdty.max = Relative.Humidity.daily.max..2.m.above.gnd.,
+                        hmdty.min = Relative.Humidity.daily.min..2.m.above.gnd.,
+                        press.max = Mean.Sea.Level.Pressure.daily.max..MSL.,
+                        press.min = Mean.Sea.Level.Pressure.daily.min..MSL.,
+                        cl.tot.max = Total.Cloud.Cover.daily.max..sfc.,
+                        cl.tot.min = Total.Cloud.Cover.daily.min..sfc.,
+                        cl.h.max = High.Cloud.Cover.daily.max..high.cld.lay.,
+                        cl.h.min = High.Cloud.Cover.daily.min..high.cld.lay.,
+                        cl.m.max = Medium.Cloud.Cover.daily.max..mid.cld.lay.,
+                        cl.m.min = Medium.Cloud.Cover.daily.min..mid.cld.lay.,
+                        cl.l.max = Low.Cloud.Cover.daily.max..low.cld.lay.,
+                        cl.l.min = Low.Cloud.Cover.daily.min..low.cld.lay.,
+                        w.s.h10m.max = Wind.Speed.daily.max..10.m.above.gnd.,
+                        w.s.h10m.min = Wind.Speed.daily.min..10.m.above.gnd.,
+                        w.s.h80m.max = Wind.Speed.daily.max..80.m.above.gnd.,
+                        w.s.h80m.min = Wind.Speed.daily.min..80.m.above.gnd.,
+                        w.s.p900.max = Wind.Speed.daily.max..900.mb.,
+                        w.s.p900.min = Wind.Speed.daily.min..900.mb.,
+                        w.g.max = Wind.Gust.daily.max..sfc.,
+                        w.g.min = Wind.Gust.daily.min..sfc.,
+                        y = pluie.demain)
+
+#Donnees de test
+d.valid = d.test[,7:46]
+
+d.valid = dplyr::rename(d.valid,
+                        temp.mean = Temperature.daily.mean..2.m.above.gnd.,
+                        hmdty.mean = Relative.Humidity.daily.mean..2.m.above.gnd.,
+                        press.mean = Mean.Sea.Level.Pressure.daily.mean..MSL.,
+                        precp = Total.Precipitation.daily.sum..sfc.,
+                        snows = Snowfall.amount.raw.daily.sum..sfc.,
+                        cl.tot.mean = Total.Cloud.Cover.daily.mean..sfc.,
+                        cl.h.mean = High.Cloud.Cover.daily.mean..high.cld.lay.,
+                        cl.m.mean = Medium.Cloud.Cover.daily.mean..mid.cld.lay.,
+                        cl.l.mean = Low.Cloud.Cover.daily.mean..low.cld.lay.,
+                        sunsh = Sunshine.Duration.daily.sum..sfc.,
+                        rdtion = Shortwave.Radiation.daily.sum..sfc.,
+                        w.s.h10m.mean = Wind.Speed.daily.mean..10.m.above.gnd.,
+                        w.d.h10m = Wind.Direction.daily.mean..10.m.above.gnd.,
+                        w.s.h80m.mean = Wind.Speed.daily.mean..80.m.above.gnd.,
+                        w.d.h80m = Wind.Direction.daily.mean..80.m.above.gnd.,
+                        w.s.p900.mean = Wind.Speed.daily.mean..900.mb.,
+                        w.d.p900 = Wind.Direction.daily.mean..900.mb.,
+                        w.g.mean = Wind.Gust.daily.mean..sfc.,
+                        temp.max = Temperature.daily.max..2.m.above.gnd.,
+                        temp.min = Temperature.daily.min..2.m.above.gnd.,
+                        hmdty.max = Relative.Humidity.daily.max..2.m.above.gnd.,
+                        hmdty.min = Relative.Humidity.daily.min..2.m.above.gnd.,
+                        press.max = Mean.Sea.Level.Pressure.daily.max..MSL.,
+                        press.min = Mean.Sea.Level.Pressure.daily.min..MSL.,
+                        cl.tot.max = Total.Cloud.Cover.daily.max..sfc.,
+                        cl.tot.min = Total.Cloud.Cover.daily.min..sfc.,
+                        cl.h.max = High.Cloud.Cover.daily.max..high.cld.lay.,
+                        cl.h.min = High.Cloud.Cover.daily.min..high.cld.lay.,
+                        cl.m.max = Medium.Cloud.Cover.daily.max..mid.cld.lay.,
+                        cl.m.min = Medium.Cloud.Cover.daily.min..mid.cld.lay.,
+                        cl.l.max = Low.Cloud.Cover.daily.max..low.cld.lay.,
+                        cl.l.min = Low.Cloud.Cover.daily.min..low.cld.lay.,
+                        w.s.h10m.max = Wind.Speed.daily.max..10.m.above.gnd.,
+                        w.s.h10m.min = Wind.Speed.daily.min..10.m.above.gnd.,
+                        w.s.h80m.max = Wind.Speed.daily.max..80.m.above.gnd.,
+                        w.s.h80m.min = Wind.Speed.daily.min..80.m.above.gnd.,
+                        w.s.p900.max = Wind.Speed.daily.max..900.mb.,
+                        w.s.p900.min = Wind.Speed.daily.min..900.mb.,
+                        w.g.max = Wind.Gust.daily.max..sfc.,
+                        w.g.min = Wind.Gust.daily.min..sfc.)
+```
+
+Ainsi, dans la suite de notre travail, nous utiliserons les tables **d.learn** et
+**d.valid**, obtenues après suppression des variables 1 à 6 des tables initiales d'apprentissage et de test et renommage des variables.
+
+**Nouvelle table d'apprentissage**
+
+```{r "table d.learn", echo=FALSE}
+summary(d.learn)
+```
+
+**Nouvelle table de validation**
+
+```{r "table d.valid", echo=FALSE}
+summary(d.valid)
+```
+
+\newpage
+
+# Choix de modèles
+
+## Première approche
+
+Nous faisons une regression logistique sans au préalable nous préoccuper des 
+colinéarités pouvant exister entre les différentes covariables ou des
+liaisons pouvant exister entre la variable à expliquer et les covariables.
+
+#### Modèle g1.1
+
+```{r "g1.1", echo=FALSE}
+g1.1 = glm(y ~ ., data = d.learn, family = binomial)
+summary(g1.1)
+```
+
+**Analyse de la sortie du modèle**
+
+ - Seules 7 covariables sur 40 présentent un seuil de significativité acceptable ; 
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modele nul ;
+ - pchisq(1239.5, 1139, lower = F) # p-value = 0.01967031 : Rejet du modele g1.1,
+  ce qui signifie que le niveau d'information non capturé par ce modèle est           significatif ;
+ - pchisq(1635.4 - 1239.5, 1179-1139, lower = F) # p-value = 4.211498e-60 : Rejet 
+  du modèle nul ; on lui préfère donc le modèle g1.1 malgré sa carence.
+  
+#### Modèle g1.2
+
+Pour ce modèle, on ne retient que les 7 covariables présentant un seuil de significativité acceptable.
+
+```{r "g1.2", echo=FALSE}
+g2.1 = glm(y ~ press.mean + w.d.p900 + press.max + press.min +cl.m.max +
+             w.s.h10m.max + w.s.h10m.min , data = d.learn, family = binomial)
+summary(g2.1)
+```
+
+**Analyse de la sortie du modèle**
+
+ - Les 7 covariables retenues ont des seuils de significativité élevés ;
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modèle nul ;
+ - pchisq(1315.8, 1173, lower = F) # p-value = 0.002050178 : Rejet du modèle g1.2, 
+  ce qui signifie que le niveau d'information non capturé par ce modèle est           significatif
+ - pchisq(1635.4-1315.8, 1179-1173, lower = F) # p-value = 3.925656e-65 : Rejet 
+ du modèle nul ; on lui préfère donc le modèle g1.2 malgré sa carence.
+ - Toutefois, d'après le critère AIC, le modèle g1.2 est moins bon que le modèle 
+ g1.1 précédent.
+ 
+ 
+## Deuxième approche
+ 
+### Sélection des covariables
+ 
+#### Analyse des corrélations entre covariables
+ 
+Afin de déceler d'éventuelles colinéarités entre covariables, nous nous interes-
+sons aux corrélations entre covariables.
+
+Nous présentons ci-dessous, les covariables qui sont fortement corrélées entre 
+elles et par conséquent succeptibles d'être colinéaires.
+
+```{r "Correlations fortes", echo=FALSE}
+#On définit la fonction significantCorrPlot pour l'affichage des corrélations fortes en fonction d'un seuil arbitraire
+significantCorrPlot <- function(data, sigLevel=0.9){
+  #Calcule et affiche les corrélations significatives à partir des fonctions : cor et corrplot
+  corr <- cor(data, use = "all.obs")
+  #Matrice symétrique, On va supprimer le triangle inférieure   
+  corr[lower.tri(corr,diag=TRUE)] <- NA 
+  #Transformer en tableau de 3 clonnes : Var1, Var2 et Freq
+  corr <- as.data.frame(as.table(corr))
+  #Suppréssion des NA
+  corr <- na.omit(corr) 
+  #selection des valeurs significatives  
+  corr <- subset(corr, abs(Freq) >= sigLevel )
+  #tri décroisant
+  corr <- corr[order(-abs(corr$Freq)),] 
+  #print(corr)
+  #transformation en matrix pour corrplot
+  mtx_corr <- reshape2::acast(corr, Var1~Var2, value.var="Freq")
+  #Affichage
+  corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ")
+}
+significantCorrPlot(d.learn)
+```
+ 
+ Afin d'éviter les colinéarités entre variables, nous éliminerons les covariables
+ suivantes :
+ 
+ - *temp.max*, *temp.min* car les informations qu'elles portent peuvent être 
+ captées à travers la covariable **temp.mean** ;
+ 
+ - *press.max*, *press.min* car les informations qu'elles portent peuvent être 
+ captées à travers la covariable **press.mean** ;
+ 
+  - *w.s.h80m.mean*, *w.g.mean*, *w.s.h10m.max* car les informations qu'elles portent peuvent être captées à travers la covariable **w.s.h10m.mean** ;
+  
+ - *w.d.h80m* car l'information qu'elle porte peut être  captée à travers la covariable **w.d.h10m** ;
+ 
+  - *w.s.p900.max* car l'information qu'elle porte peut être  captée à travers la covariable **w.s.p900.mean** ;  
+ 
+ - *w.s.h80m.min* car l'information qu'elle porte peut être  captée à travers la covariable **w.s.h10m.min** ;
+ 
+L'analyse des corrélation nous a donc permis d'éliminer 10 covariables.
+ 
+ 
+#### Analyse des liaisons entre la variable réponse et des covariables
+
+Afin d'identifier parmi les covariables restantes celles qui présentent des 
+liaisons apparentes avec la variable à prédire, nous affichons les boîtes à moustache que nous regroupons par type d'information.
+
+```{r "Boxplot_temp", echo=FALSE}
+
+# Affichage température
+covar <- dplyr::select(d.learn,
+    temp.mean,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Temperature", y = "Temperature (oC)")
+ 
+```
+
+```{r "Boxplot_humidite", echo=FALSE}
+
+#Affichage Humidité relative et Nébulosité
+covar <- dplyr::select(d.learn,
+    hmdty.min ,
+    hmdty.mean ,
+    hmdty.max ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Humidite Relative", y = "Pourcentage")
+ 
+```
+
+```{r "Boxplot_pression", echo=FALSE}
+
+#Affichage Pression
+covar <- dplyr::select(d.learn,
+    press.mean ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Pression", y = "Pression (hPa)")
+ 
+```
+
+```{r "Boxplot_nebulosite", echo=FALSE}
+
+#Nebulosite totale
+covar <- dplyr::select(d.learn,
+    cl.tot.min ,
+    cl.tot.mean ,
+    cl.tot.max ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Nebulosite totale", y = "Pourcentage")
+
+#Nebulosite forte
+covar <- dplyr::select(d.learn,
+    cl.h.min ,
+    cl.h.mean ,
+    cl.h.max ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Nebulosite forte", y = "Pourcentage")
+
+#Nebulosite moyenne
+covar <- dplyr::select(d.learn,
+    cl.m.min ,
+    cl.m.mean ,
+    cl.m.max ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Nebulosite moyenne", y = "Pourcentage")
+
+#Nebulosite faible
+covar <- dplyr::select(d.learn,
+    cl.l.min ,
+    cl.l.mean ,
+    cl.l.max ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Nebulosite faible", y = "Pourcentage")
+ 
+```
+
+```{r "Boxplot_vit-vent", echo=FALSE}
+
+#Affichage Vitesse du vent
+covar <- dplyr::select(d.learn,
+    w.s.h10m.mean ,
+    w.s.p900.mean ,
+    w.s.h10m.min ,
+    w.s.h80m.max ,
+    w.s.p900.min ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Vitesse du vent", y = "Vitesse du vent (Km/h)")
+ 
+```
+
+```{r "Boxplot_dir-vent", echo=FALSE}
+
+#Affichage direction du vent
+covar <- dplyr::select(d.learn,
+    w.d.h10m ,
+    w.d.p900 ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Direction du vent", y = "direction du vent (degres)")
+ 
+```
+
+```{r "Boxplot_rafale-vent", echo=FALSE}
+
+#Affichage rafales du vent
+covar <- dplyr::select(d.learn,
+    w.g.min ,
+    w.g.mean ,
+    w.g.max ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Rafales du vent", y = "rafales du vent (km/h)")
+ 
+```
+
+```{r "Boxplot_Precipitations", echo=FALSE}
+
+#Affichage Precipitations
+covar <- dplyr::select(d.learn,
+    precp ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Precipitations", y = "precipitation (mm)")
+ 
+```
+
+
+```{r "Boxplot_Neige", echo=FALSE}
+
+#Affichage Neige
+covar <- dplyr::select(d.learn,
+    snows ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Neige", y = "Neige (cm)")
+ 
+```
+
+```{r "Boxplot_Ensoleillement", echo=FALSE}
+
+#Affichage Ensolleilement
+covar <- dplyr::select(d.learn,
+    sunsh ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Ensolleillement", y = "ensoleillement (mns)")
+ 
+```
+
+```{r "Boxplot_Rad-sol", echo=FALSE}
+
+#Affichage Rayonnement solaire
+covar <- dplyr::select(d.learn,
+    rdtion ,
+    y
+)
+covar<- melt(covar, id="y")
+ggplot(covar, aes(x = variable, y=value, color = y)) +
+        geom_boxplot() +
+        labs(title =  "Rayonnement solaire", y = "rayonnement (W/m2)")
+ 
+```
+
+Aux vues des différents graphiques, nous éliminons les covariables dont les boîtes à moustache ne présentent pas une différence notable de distribution conditionnellement au fait qu'il a plu le lendemain ou non.
+
+Ainsi, nous ne prendrons pas en compte dans nos modèles sans interactions, les covariables suivantes :
+
+ - Realative à la température :*temp.mean* ;
+ 
+ - Relatives à l'humidité : *hmdty.min*, *hmdty.mean*, *hmdty.max* ;
+ 
+ - Relatives à la nébulosité : *cl.tot.max*, *cl.h.min*, *cl.m.min*, *cl.l.min* ;
+ 
+ - Relative à la neige : *snows* ;
+ 
+ - Relative à la radiation solaire : *rdtion*.
+  
+### Modèle additif sans interactions
+
+#### Modèle g2.1
+
+
+```{r "g2.1", echo=FALSE}
+g2.1 = glm(y ~ . -temp.min -temp.max -press.min -press.max -
+             w.s.h80m.mean -w.g.mean -w.s.h10m.max -w.d.h80m -
+             w.s.p900.max -w.s.h80m.min -temp.mean -hmdty.min -                   hmdty.mean -hmdty.max -cl.tot.max -cl.h.min -cl.m.min -
+             cl.l.min -snows -rdtion, 
+           data = d.learn, family = binomial)
+summary(g2.1)
+```
+
+
+**Analyse de la sortie du modèle**
+
+ - 7 des covariables retenues ont des seuils de significativité acceptables ;
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modèle nul ;
+ - pchisq(1297.7, 1159, lower = F) # p-value = 0.002659516 : Rejet du modèle g2.1, ce qui signifie que le niveau d'information non capturé par ce modèle est significatif
+ - pchisq(1635.4-1297.7, 1179-1159, lower = F) # p-value = 1.516215e-5 : Rejet du modèle nul ; on lui préfère donc le modèle g2.1 malgré sa carence.
+
+ 
+#### Modèle g2.2
+
+
+```{r "g2.2", echo=FALSE}
+g2.2 = glm(y ~ press.mean +cl.tot.mean +sunsh +w.s.h10m.mean +
+             w.d.p900 +cl.m.max +w.g.max, 
+           data = d.learn, family = binomial)
+summary(g2.2)
+```
+
+
+**Analyse de la sortie du modèle**
+
+ - Les 7 covariables retenues ont des seuils de significativité importants ;
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modèle nul ;
+ - pchisq(1319.2, 1172, lower = F) # p-value = 0.001666054 : Rejet du modèle g2.2, ce qui signifie que le niveau d'information non capturé par ce modèle est significatif
+ - pchisq(1635.4-1319.2, 1179-1172, lower = F) # p-value = 2.092541e-64 : Rejet du modèle nul ; on lui préfère donc le modèle g2.2 malgré ses carences.
+ - Toutefois, d'après le critère AIC, le modèle g2.2 est meilleur que le modèle g2.1 précédent.
+ 
+### Modèle avec interactions
+
+#### Modèle g3.1
+
+```{r "g3.1", echo=FALSE}
+g3.1 = glm(y ~ press.mean +cl.tot.mean +sunsh +w.s.h10m.mean +
+             w.d.p900 +cl.m.max +w.g.max +
+             temp.mean : press.mean +
+             temp.mean : cl.tot.mean +
+             temp.mean : sunsh +
+             temp.mean : w.s.h10m.mean +
+             temp.mean : w.d.p900 +
+             temp.mean : cl.m.max +
+             temp.mean : w.g.max, 
+           data = d.learn, family = binomial)
+summary(g3.1)
+```
+
+**Analyse de la sortie du modèle**
+
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modèle nul ;
+ - pchisq(1264.9, 1165, lower = F) # p-value = 0.02133338 : Rejet du modèle g3.1, ce qui signifie que le niveau d'information non capturé par ce modèle est significatif
+ - pchisq(1635.4-1264.9, 1179-1165, lower = F) # p-value = 2.043539e-70 : Rejet du modèle nul ; on lui préfère donc le modèle g2.2 malgré ses carences.
+ - Toutefois, d'après le critère AIC, le modèle g3.1 est meilleur que le modèle g2.2 précédent.
+ 
+### Recherche automatisée de modèle
+
+#### Modèle optimal suivant le critère AIC
+
+```{r "g4.1", echo=FALSE}
+g4.1.AIC = stepAIC(glm(y ~ . +
+                         temp.mean : ., 
+                         data = d.learn, family = binomial),
+                  direction = c("both"), 
+                  trace=FALSE)
+summary(g4.1.AIC)
+```
+
+**Analyse de la sortie du modèle**
+
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modèle nul ;
+ - pchisq(1149.1, 1139, lower = F) # p-value = 0.4110091 : Non rejet du modèle g4.1.AIC, ce qui signifie que ce modèle explique suffisament les observations pour être préféré au modèle saturé ;
+ - D'après le critère AIC, le modèle g4.1.AIC est meilleur que tous les précédents.
+ 
+ #### Modèle optimal suivant le critère BIC
+
+```{r "g4.2", echo=FALSE}
+g4.2.BIC = stepAIC(glm(y ~ . +
+                         temp.mean : ., 
+                         data = d.learn, family = binomial),
+                  direction = c("both"),
+                  k=log(nrow(d.learn)),
+                  trace=FALSE)
+summary(g4.2.BIC)
+```
+
+**Analyse de la sortie du modèle**
+
+ - pchisq(1635.4, 1179, lower = F) # p-value = 1.945958e-17 : Rejet du modèle nul ;
+ - pchisq(1212.7, 1166, lower = F) # p-value = 0.1664719 : Non rejet du modèle g4.2.BIC, ce qui signifie que ce modèle explique suffisament les observations pour être préféré au modèle saturé ;
+ - D'après le critère AIC, le modèle g4.1.AIC est meilleur que le modèle g4.2.BIC.
+ 
+## Conclusion
+
+Il ressort des comparaisons des différents modèles via le critère AIC, que les meilleurs modèles parmi ceux que nous avons construits sont le modèle **g4.1.AIC** et le modèle **g4.2.BIC**. Nous ne retiendrons que ces 2 modèles pour la suite.
+
+# Validation de modèle
+
+Nous validons les modèles en évaluant leurs risques d'erreur de prédiction.
+
+```{r "validation k-fold", echo=FALSE}
+
+k <- 10
+index <- sample(1:k, nrow(d.learn), replace=T)
+d.learn$index  = index
+estim.g4.1.AIC <- rep(NA, k)
+estim.g4.2.BIC <- rep(NA, k)
+
+for(i in 1:k){
+  # Model stepwise AIC
+  g4.1.AIC_k_fold <- glm(formula = y ~ temp.mean + press.mean + precp + cl.tot.mean + 
+    cl.h.mean + cl.m.mean + cl.l.mean + sunsh + rdtion + w.s.h10m.mean + 
+    w.d.p900 + w.g.mean + temp.min + press.max + press.min + 
+    cl.tot.min + cl.m.max + cl.m.min + cl.l.max + w.s.h10m.max + 
+    w.s.h10m.min + w.s.h80m.max + w.s.h80m.min + w.s.p900.min + 
+    w.g.max + temp.mean:cl.tot.mean + temp.mean:cl.h.mean + temp.mean:cl.m.mean + 
+    temp.mean:cl.l.mean + temp.mean:sunsh + temp.mean:rdtion + 
+    temp.mean:w.s.h10m.mean + temp.mean:w.d.p900 + temp.mean:temp.min + 
+    temp.mean:press.max + temp.mean:cl.m.max + temp.mean:cl.m.min + 
+    temp.mean:w.s.h80m.max + temp.mean:w.s.p900.min + temp.mean:w.g.max, 
+    family = binomial, data = d.learn[index != i, ])
+
+  # Model stepwise BIC
+  g4.2.BIC_k_fold <- glm(formula = y ~ temp.mean + press.mean + cl.tot.mean + w.d.p900 + 
+    temp.min + press.max + press.min + cl.m.max + w.g.max + temp.mean:w.d.p900 + 
+    temp.mean:temp.min + temp.mean:press.max + temp.mean:cl.m.max, 
+    family = binomial, data = d.learn[index != i, ])
+  
+  # Prediction logistic aic
+  pred.g4.1.AIC <- predict( g4.1.AIC_k_fold, 
+                               newdata = d.learn[index == i, ],
+                               type="response")
+  # Prediction logistic bic
+  pred.g4.2.BIC <- predict( g4.2.BIC_k_fold, 
+                               newdata = d.learn[index == i, ],
+                               type="response")
+  
+  estim.g4.1.AIC[i] <- mean(d.learn[index==i, "y"] == (pred.g4.1.AIC >.5), na.rm = T)
+  estim.g4.2.BIC[i] <- mean(d.learn[index==i, "y"] == (pred.g4.2.BIC >.5), na.rm = T)
+  
+}
+
+print("Taux moyen de prediction avec le modele g4.1.AIC :")
+mean(estim.g4.1.AIC)
+print("Taux moyen de prediction avec le modele g4.2.BIC")
+mean(estim.g4.2.BIC)
+
+```
+
+
+Les taux de bonnes prédictions des 2 modèles étant semblables et pouvant être l'un au dessus de l'autre et inversement, suivant les tirages permettant de constituer la partitition des données en 10 sous-ensembles, nous retenons le modèle **g4.1.AIC** comme modèle de prédiction.
+
+# Prédiction du lendemain
+
+Nous effectuons les prédictions pour les données contenues dans le fichier *meteo.test.csv* sur la base du modèle **g4.1.AIC**.
+
+```{r "prediction"}
+
+pred.g4.1.AIC.test <- predict( g4.1.AIC, 
+                                  newdata = d.valid,
+                                  type="response")
+summary(pred.g4.1.AIC.test)
+
+d.test$pluie.demain <- (pred.g4.1.AIC.test >.5)
+
+#On verifie que tous les jours ont chacun une prévision
+sum(is.na(d.test$pluie.demain))
+
+#Le modele predit 153 jours de pluies
+summary(d.test$pluie.demain)
+
+#Les predictions sont enregistrees dans le fichier prediction.test.csv
+write.csv(d.test, "prediction.test_HermannKOUAMO.csv")
+
+```
